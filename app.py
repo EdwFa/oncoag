@@ -16,8 +16,6 @@ import datetime
 #     }
 # )
 
-
-
 from streamlit_ace import st_ace
 from groq import Groq
 import os
@@ -173,7 +171,8 @@ def write_to_log(filename: str, text: str):
     :param text: Текст для записи.
     """
     # Получаем текущее время
-    now = datetime.datetime.now()
+    now = datetime.now()
+    print(now)
     timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
 
     # Формируем строку для записи
@@ -184,6 +183,67 @@ def write_to_log(filename: str, text: str):
         file.write(log_entry)
 
     # print(f"Сообщение записано в {filename}")
+
+
+from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
+from streamlit.web.server.server import Server
+
+
+def get_session_id():
+    """Получает уникальный ID сессии пользователя"""
+    ctx = get_script_run_ctx()
+    if ctx is None:
+        return "unknown_session"
+    return ctx.session_id
+
+
+def _get_session():
+    from streamlit.runtime import get_instance
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+    runtime = get_instance()
+    session_id = get_script_run_ctx().session_id
+    session_info = runtime._session_mgr.get_session_info(session_id)
+    if session_info is None:
+        raise RuntimeError("Couldn't get your Streamlit Session object.")
+    return session_info
+
+def get_client_ip():
+    """Пытается получить IP-адрес клиента"""
+    session_info = _get_session()
+    if session_info is None:
+        return "unknown_ip"
+    print(session_info)
+    return
+    # Получаем IP из заголовков запроса
+    headers = session_info.request.headers
+    x_forwarded_for = headers.get("X-Forwarded-For")
+    if x_forwarded_for:
+        return x_forwarded_for.split(",")[0].strip()
+    remote_ip = headers.get("Remote-Addr")
+    return remote_ip or "unknown_ip"
+
+
+def write_to_file_with_metadata(filename: str, question: str):
+    """
+    Записывает вопрос пользователя в файл вместе с метаданными:
+    - Дата и время
+    - Session ID
+    - IP-адрес
+
+    :param filename: Имя файла для записи
+    :param question: Текст вопроса пользователя
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    session_id = get_session_id()
+    ip_address = get_client_ip()
+
+    log_entry = f"[{timestamp}] [IP: {ip_address}] [Session: {session_id}] Question: {question}\n"
+
+    with open(filename, "a", encoding="utf-8") as file:
+        file.write(log_entry)
+
+    st.info(f"Вопрос записан в лог: {log_entry.strip()}")
+
 
 def view_file_contents(filename: str):
     """
@@ -199,6 +259,33 @@ def view_file_contents(filename: str):
             st.info("Файл пуст.")
     except FileNotFoundError:
         st.error(f"Файл '{filename}' не найден.")
+
+from datetime import datetime
+def download_log_button(log_file_path: str = "oncobot.log"):
+    """
+    Отображает кнопку 'Скачать лог' и позволяет скачать файл с логами.
+
+    :param log_file_path: Путь к файлу лога (по умолчанию 'user_questions.log')
+    """
+    try:
+        with open(log_file_path, "rb") as f:
+            log_data = f.read()
+
+        # Генерируем имя файла с временной меткой
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        downloadable_name = f"log_{timestamp}.txt"
+
+        st.download_button(
+            label="🔽 Скачать лог",
+            data=log_data,
+            file_name=downloadable_name,
+            mime="text/plain",
+            key="download_log_button"
+        )
+
+    except FileNotFoundError:
+        st.warning("Файл лога не найден. Пока нет записей для скачивания.")
+
 
 # Ключи интер=фейсов
 # GROQ_API_KEY = "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" - старый
@@ -450,6 +537,8 @@ This is passed into the `{helper_response}` variable in the system prompt. \
 
         if st.form_submit_button("Logview"):
             view_file_contents(LOG_FILE)
+        # if st.form_submit_button("Download"):
+    download_log_button(log_file_path="oncobot.log")
 
     # st.markdown("---")
     # st.markdown("""
@@ -646,6 +735,7 @@ if query := st.chat_input("Ask a question"):
     st.session_state.messages.append({"role": "user", "content": query})
     with st.chat_message("user"):
         st.write(query)
+        # write_to_file_with_metadata(LOG_FILE, query)
         write_to_log(LOG_FILE, query)
         # print(query)
         # logging.info(query)
@@ -661,6 +751,6 @@ if query := st.chat_input("Ask a question"):
         #     print("PDF успешно создан!")
         # else:
         #     print("Ошибка при создании PDF")
-        print(response)
+        # print(response)
     
     st.session_state.messages.append({"role": "assistant", "content": response})
