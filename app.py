@@ -2,6 +2,8 @@ import copy
 import json
 from typing import Iterable, Dict, Any
 import streamlit as st
+# import logging
+import datetime
 # st.set_page_config(
 #     page_title="Ex-stream-ly Cool App",
 #     page_icon="🧊",
@@ -148,8 +150,55 @@ rec_layer_agent_config = {
     },
 }
 
+# === Настройка логирования ===
+LOG_FILE = "oncobot.log"
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format="%(asctime)s %(message)s",
+#     handlers=[
+#         logging.FileHandler(LOG_FILE, encoding="utf-8"),
+#         # logging.StreamHandler()
+#     ]
+# )
 
+# def log_query(question: str):
+#     """Функция для записи вопроса и ответа в лог"""
+#     logging.info(question)
 
+def write_to_log(filename: str, text: str):
+    """
+    Записывает текст в файл с указанием даты и времени.
+
+    :param filename: Имя файла, в который будет записан текст.
+    :param text: Текст для записи.
+    """
+    # Получаем текущее время
+    now = datetime.datetime.now()
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
+
+    # Формируем строку для записи
+    log_entry = f"[{timestamp}] {text}\n"
+
+    # Открываем файл в режиме добавления и записываем текст
+    with open(filename, "a", encoding="utf-8") as file:
+        file.write(log_entry)
+
+    # print(f"Сообщение записано в {filename}")
+
+def view_file_contents(filename: str):
+    """
+    Отображает содержимое текстового файла в интерфейсе Streamlit.
+    :param filename: Имя файла, содержимое которого нужно отобразить.
+    """
+    try:
+        with open(filename, "r", encoding="utf-8") as file:
+            content = file.read()
+        if content:
+            st.text_area("Содержимое файла:", value=content, height=400)
+        else:
+            st.info("Файл пуст.")
+    except FileNotFoundError:
+        st.error(f"Файл '{filename}' не найден.")
 
 # Ключи интер=фейсов
 # GROQ_API_KEY = "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" - старый
@@ -399,6 +448,9 @@ This is passed into the `{helper_response}` variable in the system prompt. \
             except Exception as e:
                 st.error(f"Error updating configuration: {str(e)}")
 
+        if st.form_submit_button("Logview"):
+            view_file_contents(LOG_FILE)
+
     # st.markdown("---")
     # st.markdown("""
     # ### Credits
@@ -594,6 +646,10 @@ if query := st.chat_input("Ask a question"):
     st.session_state.messages.append({"role": "user", "content": query})
     with st.chat_message("user"):
         st.write(query)
+        write_to_log(LOG_FILE, query)
+        # print(query)
+        # logging.info(query)
+
 
     moa_agent: MOAgent = st.session_state.moa_agent
     with st.chat_message("assistant"):
